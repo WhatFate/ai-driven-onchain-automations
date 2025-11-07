@@ -1,0 +1,140 @@
+
+# Kairos — AI-Driven Onchain Automations (DeFi Copilot)
+
+**Kairos** is an AI-powered onchain automation framework that lets users create, manage, and execute blockchain workflows using natural language.  
+Think of it as **“Zapier for DeFi”** — an AI copilot that turns your commands into autonomous smart contract actions.
+
+## Overview
+
+With Kairos, you can automate onchain actions like transfers, swaps, or staking conditions — all through simple text.
+
+### Example Commands
+
+> “If ETH price reaches $2500 — send 0.1 ETH to this address.”  
+> “Every Monday, transfer 5 USDC to my subscription contract.”  
+> “When my balance falls below 0.5 ETH, top it up with 0.1 from Polygon.”
+
+The AI agent parses these intents and generates executable workflows stored on-chain.
+
+## How It Works
+
+### 1. **AI Interface Layer**
+- User interacts via chat.
+- The AI parses intent and outputs a structured JSON:
+
+```json
+{
+  "trigger": {
+    "type": "price",
+    "asset": "ETH",
+    "operator": ">=",
+    "value": 2500
+  },
+  "action": {
+    "token": "ETH",
+    "amount": 0.1,
+    "to": "0xAbC123..."
+  }
+}
+```
+
+This JSON is sent to the backend through a secure REST API or webhook.
+
+### 2. **Backend / AI Executor**
+
+* Stores user workflows and links them to wallet addresses.
+* Generates the corresponding smart contract calls.
+* Handles signature requests and trigger validation.
+
+### 3. **Smart Contract Layer (Solidity)**
+
+* Keeps workflow definitions (condition → action).
+* Executes actions deterministically when triggers fire.
+* Enforces limits: amount caps, frequency, expiration time.
+
+### 4. **Off-chain Agent / Oracle**
+
+* Monitors onchain/offchain data (e.g., prices via Chainlink).
+* Calls `execute()` when conditions are met.
+* Ensures reliable automation without constant onchain polling.
+
+### 5. **User Notifications**
+
+* When an automation runs, the AI notifies the user:
+
+  > “Condition met — sent 0.1 ETH to 0xAbC123…”
+
+## Tech Stack
+
+| Component          | Technology                         |
+| ------------------ | ---------------------------------- |
+| AI Parsing Layer   | OpenAI / Llama / Custom LLM        |
+| Smart Contracts    | Solidity (EVM-compatible networks) |
+| Off-chain Agent    | Node.js / Python                   |
+| Price Data         | Chainlink / Band Protocol          |
+| Frontend           | Next.js + wagmi + RainbowKit       |
+| Wallet Integration | MetaMask / WalletConnect           |
+
+
+## Why Kairos?
+
+* **No-code automation:** Create DeFi workflows by simply typing commands.
+* **AI-native UX:** Natural language → smart contract execution.
+* **Secure by design:** Onchain permission control for each agent.
+* **Composability:** Plug-and-play with any EVM protocol or oracle.
+
+## Potential Extensions
+
+* **Automation Marketplace** for reusable “if-this-then-that” workflows.
+* **DAO governance** for managing shared automations.
+* **AI-based portfolio balancing** and real-time strategy execution.
+
+## Example Workflow (MVP Phase)
+
+**Trigger:** ETH price ≥ $2500
+**Action:** Send 0.1 ETH to `0xAbC123...`
+
+**Flow:**
+
+1. AI parses command and stores workflow.
+2. Off-chain agent watches ETH/USD price via Chainlink.
+3. When triggered, backend executes smart contract call.
+4. User gets notification:
+    “0.1 ETH successfully transferred.”
+
+
+## Architecture Diagram
+
+```
++---------------------+
+|         User        |
++----------+----------+
+           |
+           v
++----------+----------+
+|   AI Parser (LLM)   |
++----------+----------+
+           |
+           v
++----------+----------+
+|   Backend Executor  |
++----------+----------+
+           |
+           v
++----------+----------+
+| Smart Contract (EVM)|
++----------+----------+
+           |
+           v
++----------+----------+
+|  Off-chain Agent /  |
+|     Chainlink       |
++---------------------+
+```
+
+> *Kairos bridges the gap between human intent and onchain execution — making DeFi truly autonomous.*
+
+## License
+
+[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
