@@ -137,4 +137,3 @@ This JSON is sent to the backend through a secure REST API or webhook.
 ## License
 
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-
