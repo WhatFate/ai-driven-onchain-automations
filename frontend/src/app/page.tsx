@@ -3,6 +3,9 @@
 import { motion } from "framer-motion";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import Tilt from "react-parallax-tilt";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useAccount } from "wagmi";
 
 function FeatureCard({ title, text }: { title: string; text: string }) {
   return (
@@ -17,6 +20,15 @@ function FeatureCard({ title, text }: { title: string; text: string }) {
 }
 
 export default function Home() {
+  const { isConnected } = useAccount();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isConnected) {
+      router.push("/dashboard");
+    }
+  }, [isConnected, router]);
+
   return (
     <main className="relative flex flex-col min-h-screen text-white overflow-hidden">
       <div className="absolute inset-0 -z-10">

@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { sepolia, baseSepolia } from "viem/chains";
 import React from "react";
 
-const config = getDefaultConfig({
+export const config = getDefaultConfig({
   appName: "Kairos",
   projectId: "f1dfb8d5bc2cd53aece8415e48088bfc",
   chains: [sepolia, baseSepolia],
