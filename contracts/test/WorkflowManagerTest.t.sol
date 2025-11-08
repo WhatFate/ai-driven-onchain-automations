@@ -11,6 +11,14 @@ contract WorkflowManagerTest is Test {
     WorkflowManager public workflowManager;
     uint256 amountToSend = 1e18;
 
+    struct Workflow {
+        address user;
+        address token;
+        uint256 amount;
+        address target;
+        uint256 triggerPrice;
+    }
+
     function setUp() public {
         vm.prank(owner);
         workflowManager = new WorkflowManager();
@@ -18,24 +26,26 @@ contract WorkflowManagerTest is Test {
     }
 
     function testAddAction() public {
-        vm.prank(owner);
-        workflowManager.addAction(user, target, 1e18);
-        bytes memory action = workflowManager.userAction(user);
-        (address targetFromBytes, uint256 amountFromBytes) = abi.decode(action, (address, uint256));
+        vm.prank(user);
+        uint256 triggerPrice = 500;
+        workflowManager.addAction(amountToSend, target, triggerPrice);
+
+        (,, uint256 _amount, address _target, uint256 _triggerPrice) = workflowManager.userAction(user);
         
-        assertEq(targetFromBytes, target);
-        assertEq(amountFromBytes, amountToSend);
+        assertEq(_amount, amountToSend);
+        assertEq(_target, target);
+        assertEq(_triggerPrice, triggerPrice);
     }
 
     function testExecuteAction() public {
-        vm.startPrank(owner);
-        
+        vm.prank(user);
         uint256 targetBalanceBefore = target.balance;
-        workflowManager.addAction(user, target, 1e18);
+        workflowManager.addAction(amountToSend, target, 500);
+
+        vm.prank(owner);
         workflowManager.execute(user);
         uint256 targetBalanceAfter = target.balance;
         
         assertGt(targetBalanceAfter, targetBalanceBefore);
-        vm.stopPrank();
     }
 }

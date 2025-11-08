@@ -7,7 +7,7 @@ import {WorkflowManager} from "src/WorkflowManager.sol";
 contract DeployWorkflowManager is Script {
     function run() public {
         vm.startBroadcast();
-        WorkflowManager workflowManager = new WorkflowManager();
+        new WorkflowManager();
         vm.stopBroadcast();
     }
 }
