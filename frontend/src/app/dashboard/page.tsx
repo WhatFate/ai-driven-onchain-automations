@@ -5,6 +5,8 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { askAIBackend } from "@/src/lib/ai/askAIBackend";
 import { useAccount } from "wagmi";
 import { FiSend } from "react-icons/fi";
+import { createAutomation } from "@/src/lib/createAutomation";
+import { time } from "console";
 
 interface Message {
   role: "user" | "assistant" | "error";
@@ -28,14 +30,25 @@ export default function Dashboard() {
     setLoading(true);
 
     try {
-      const workflow = await askAIBackend(userMessage.content, address!);
-
-      const aiMessage: Message = {
-        role: "assistant",
-        content: `Action creation detected! Please review before signing:\n\nTrigger: ${workflow.trigger_type} ${workflow.trigger_operator} ${workflow.trigger_value} ${workflow.trigger_asset}\nAction: ${workflow.action_type} ${workflow.action_amount} ${workflow.action_token} → ${workflow.action_to}`,
-      };
-
-      setMessages((prev) => [...prev, aiMessage]);
+      const response = await askAIBackend(userMessage.content, address!);
+      if (response.status == "message") {
+        const aiMessage: Message = {
+          role: "assistant",
+          content: response.response,
+        };
+        setMessages((prev) => [...prev, aiMessage]);
+      } else if (response.status == "automation_ready") {
+        const aiMessage: Message = {
+          role: "assistant",
+          content: response.prompt,
+        };
+        setMessages((prev) => [...prev, aiMessage]);
+        await createAutomation(
+          response.workflow.action_amount,
+          response.workflow.action_to,
+          response.workflow.trigger_value
+        );
+      }
     } catch (error) {
       console.error("AI Chat error:", error);
       setMessages((prev) => [
