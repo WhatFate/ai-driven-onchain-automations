@@ -1,4 +1,3 @@
-import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,11 +27,34 @@ class UserQuery(BaseModel):
 async def ask_ai(request: Request):
     data = await request.json()
     question = data.get("question", "")
-    answer = get_asi1_response(question)
-    workflow = parse_and_extract_ai_response(answer)
-    
-    return {"workflow": workflow}
+    ai_answer = get_asi1_response(question)
+    result = parse_and_extract_ai_response(ai_answer)
 
+    result_type = result.get("type", "")
+    success = result.get("success", False)
+
+    if result_type == "text":
+        return {"status": "message", "response": result.get("message", "")}
+
+    if result_type == "incomplete":
+        return {
+            "status": "incomplete",
+            "response": result.get("message", ""),
+            "details": result.get("details", {})
+        }
+
+    if success:
+        return {"status": "automation_ready", "workflow": result.get("workflow", {}), "prompt": result.get("prompt")}
+
+    if not success:
+        ai_text = result.get("message") or ai_answer
+        return {
+            "status": "message",
+            "response": ai_text.strip() if isinstance(ai_text, str) else str(ai_text),
+            "raw": result
+        }
+
+    return {"status": "automation_ready", "workflow": result.get("workflow", {})}
 
 if __name__ == "__main__":
     import uvicorn
