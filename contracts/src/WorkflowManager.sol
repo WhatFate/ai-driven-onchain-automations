@@ -5,6 +5,7 @@ import {Ownable} from "@openzeppelin-contracts/contracts/access/Ownable.sol";
 
 contract WorkflowManager is Ownable {
     error WorkflowManager__TransferFailed();
+    error WorkflowManager__BalanceIsZero();
 
     struct Workflow {
         address user;
@@ -15,6 +16,7 @@ contract WorkflowManager is Ownable {
     }
 
     mapping(address user => Workflow action) public userAction;
+    mapping(address user => uint256 balanceEth) public userBalance;
 
     constructor() Ownable(msg.sender) {}
 
@@ -26,11 +28,24 @@ contract WorkflowManager is Ownable {
         }
     }
 
-    function addAction(uint256 amount, address target, uint256 triggerPrice) external {
+    function addActionEth(address target, uint256 triggerPrice) external payable {
+        userBalance[msg.sender] += msg.value;
         Workflow storage w = userAction[msg.sender];
-        w.amount = amount;
+        w.amount = msg.value;
         w.target = target;
         w.triggerPrice = triggerPrice;
     }
     
+    function cancelAction() external {
+        address user = msg.sender;
+        uint256 balance = userBalance[user];
+        if (balance == 0) revert WorkflowManager__BalanceIsZero();
+
+        userBalance[user] = 0;
+        delete userAction[user];
+
+        (bool success, ) = payable(user).call{value: balance}("");
+        if (!success) revert WorkflowManager__TransferFailed();
+    }
+
 }
