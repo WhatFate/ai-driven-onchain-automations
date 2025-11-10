@@ -5,8 +5,8 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { askAIBackend } from "@/src/lib/ai/askAIBackend";
 import { useAccount } from "wagmi";
 import { FiSend } from "react-icons/fi";
-import { createAutomation } from "@/src/lib/createAutomation";
-import { time } from "console";
+import { RiCloseCircleLine } from "react-icons/ri";
+import { createAutomation, cancelAutomation } from "@/src/lib/automation";
 
 interface Message {
   role: "user" | "assistant" | "error";
@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [canceling, setCanceling] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { address } = useAccount();
@@ -31,18 +32,16 @@ export default function Dashboard() {
 
     try {
       const response = await askAIBackend(userMessage.content, address!);
-      if (response.status == "message") {
-        const aiMessage: Message = {
-          role: "assistant",
-          content: response.response,
-        };
-        setMessages((prev) => [...prev, aiMessage]);
-      } else if (response.status == "automation_ready") {
-        const aiMessage: Message = {
-          role: "assistant",
-          content: response.prompt,
-        };
-        setMessages((prev) => [...prev, aiMessage]);
+      if (response.status === "message") {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: response.response },
+        ]);
+      } else if (response.status === "automation_ready") {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: response.prompt },
+        ]);
         await createAutomation(
           response.workflow.action_amount,
           response.workflow.action_to,
@@ -60,22 +59,56 @@ export default function Dashboard() {
     }
   };
 
-  return (
-    <main className="relative flex flex-col items-center justify-center min-h-screen text-white overflow-hidden">
-      <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-main-gradient" />
-        <div className="absolute inset-0 bg-aurora animate-gradient-slow opacity-40" />
-        <div className="absolute inset-0 bg-conic-light animate-spin-slower opacity-30" />
-        <div className="absolute inset-0 bg-stars opacity-20" />
-      </div>
+  const handleCancel = async () => {
+    try {
+      setCanceling(true);
+      await cancelAutomation();
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Your scheduled action has been cancelled.",
+        },
+      ]);
+    } catch (error) {
+      console.error("Cancel error:", error);
+      setMessages((prev) => [
+        ...prev,
+        { role: "error", content: "Failed to cancel your action." },
+      ]);
+    } finally {
+      setCanceling(false);
+    }
+  };
 
-      <div className="w-full max-w-3xl bg-gray-900/80 backdrop-blur-md rounded-3xl shadow-2xl flex flex-col h-[600px] overflow-hidden">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-700">
+  return (
+    <main className="relative flex min-h-screen text-white">
+      <aside className="w-64 bg-gray-900/90 backdrop-blur-md p-6 flex flex-col gap-6 shadow-2xl border-r border-gray-700">
+        <h2 className="text-xl font-bold mb-2">Your Automation</h2>
+        <p className="text-gray-300 text-sm">
+          Manage your scheduled actions. For now, only cancelling is available.
+        </p>
+        <button
+          onClick={handleCancel}
+          disabled={canceling}
+          className={`flex items-center justify-center px-4 py-3 rounded-lg font-semibold text-white transition-all gap-2 ${
+            canceling
+              ? "bg-red-400 cursor-not-allowed"
+              : "bg-red-600 hover:bg-red-700 cursor-pointer"
+          }`}
+        >
+          <RiCloseCircleLine size={20} />
+          {canceling ? "Canceling..." : "Cancel Your Scheduled Action"}
+        </button>
+      </aside>
+
+      <div className="flex-1 flex flex-col h-screen">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-700 bg-gray-900/80">
           <h1 className="text-2xl font-bold tracking-wide">Kairos AI Chat</h1>
           <ConnectButton showBalance={false} chainStatus="none" />
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 bg-gray-900/80">
           {messages.map((msg, idx) => (
             <div
               key={idx}
@@ -93,7 +126,7 @@ export default function Dashboard() {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="flex px-6 py-4 border-t border-gray-700 gap-3">
+        <div className="flex px-6 py-4 border-t border-gray-700 gap-3 bg-gray-900/80">
           <input
             ref={inputRef}
             type="text"
@@ -102,7 +135,7 @@ export default function Dashboard() {
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             placeholder="Type your command..."
             className="flex-1 bg-gray-800/80 text-white placeholder-gray-400 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-            disabled={loading}
+            disabled={loading || canceling}
           />
           <button
             onClick={sendMessage}
