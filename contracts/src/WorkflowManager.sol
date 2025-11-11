@@ -48,4 +48,15 @@ contract WorkflowManager is Ownable {
         if (!success) revert WorkflowManager__TransferFailed();
     }
 
+    function checkUpkeep(bytes calldata checkData) 
+        external 
+        view 
+        override 
+        returns (bool upkeepNeeded, bytes memory performData)
+    {
+        upkeepNeeded = 
+    }
+
+    function performUpkeep(bytes calldata performData) external override;
+
 }
