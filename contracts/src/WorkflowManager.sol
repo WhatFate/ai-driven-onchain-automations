@@ -1,118 +1,127 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import {Ownable} from "@openzeppelin-contracts/contracts/access/Ownable.sol";
-import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
-import {AutomationCompatible} from "@chainlink/contracts/src/v0.8/automation/AutomationCompatible.sol";
+import { Ownable } from "@openzeppelin-contracts/contracts/access/Ownable.sol";
+import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import { IAutomationActions as Actions } from "./interfaces/IAutomationActions.sol";
 
-contract WorkflowManager is Ownable, AutomationCompatible {
+contract WorkflowManager is Ownable {
     error WorkflowManager__TransferFailed();
     error WorkflowManager__NotAuthorized();
     error WorkflowManager__InvalidParameter();
     error WorkflowManager__BalanceTooLow();
+    error WorkflowManager__AmountIsTooLow();
 
-    event ActionAdded(address indexed user, address indexed target, uint256 amount, uint256 triggerPrice);
+    event PriceActionCreated(address indexed user, address token, uint256 triggerPrice);
+    event ReceiveActionCreated(address indexed user, address token, address receiver);
+    event TimeActionCreated(address indexed user, uint256 executeAfter);
     event ActionCancelled(address indexed user, uint256 refunded);
     event ActionExecuted(address indexed user, address indexed target, uint256 amount);
-    event ForwarderInitialized(address forwarder);
 
-    struct Workflow {
-        address token;
-        address priceFeed;
-        address target;
-        uint256 amount;
-        uint256 triggerPrice;
-        bool gt;
-    }
-
-
-    mapping(address user => Workflow action) public workflows;
+    mapping(address user => mapping(uint256 nonce => UserAction action)) public userActions;
     mapping(address user => uint256 balance) public userBalances;
+    mapping(address user => uint256 nonce) public userNonces;
 
-    address public forwarderAddress;
-    int256 private constant PRICE_SCALE = 1e10;
-
-    modifier onlyForwarder() {
-        if (msg.sender != forwarderAddress) revert WorkflowManager__NotAuthorized();
-        _;
+    struct UserAction {
+        ActionType actionType;
+        bytes action;
     }
+
+    enum ActionType {
+        PriceTrigger,
+        ReceiveTrigger,
+        TimeTrigger 
+    }
+
+    int256 private constant PRICE_SCALE = 1e10;
+    uint256 private constant FEE = 1e14; // 0,0001 eth
 
     constructor() Ownable(msg.sender) {}
 
-    function initializeForwarder(address _forwarderAddress) external onlyOwner {
-        if (_forwarderAddress == address(0) || forwarderAddress != address(0)) revert WorkflowManager__InvalidParameter();
-        forwarderAddress = _forwarderAddress;
-        emit ForwarderInitialized(_forwarderAddress);
-    }
-
-    function addActionEth(address priceFeed, address target, uint256 triggerPrice, bool gt) external payable {
-        if (target == address(0) || priceFeed == address(0)) {
-            revert WorkflowManager__InvalidParameter();
+    function addAction(bytes memory userWorkflow, ActionType actionType) external payable {
+        if (ActionType.PriceTrigger == actionType) {
+            addPriceTriggerAction(userWorkflow);
+        } else if (ActionType.ReceiveTrigger == actionType) {
+            addReceiveTriggerAction(userWorkflow);
+        } else if (ActionType.TimeTrigger == actionType) {
+            addReceiveTriggerAction(userWorkflow);
         }
-        userBalances[msg.sender] += msg.value;
-        Workflow storage w = workflows[msg.sender];
-        w.amount += msg.value;
-        w.priceFeed = priceFeed;
-        w.target = target;
-        w.triggerPrice = triggerPrice;
-        w.gt = gt;
-        emit ActionAdded(msg.sender, target, w.amount, triggerPrice);
     }
     
-    function cancelAction() external {
-        address user = msg.sender;
-        uint256 balance = userBalances[user];
+    // function cancelAction() external {
+    //     // address user = msg.sender;
+    //     // uint256 balance = userBalances[user];
 
-        userBalances[user] = 0;
-        delete workflows[user];
+    //     // userBalances[user] = 0;
+    //     // delete workflows[user];
 
-        (bool success, ) = payable(user).call{value: balance}("");
-        if (!success) revert WorkflowManager__TransferFailed();
-        emit ActionCancelled(user, balance);
+    //     // (bool success, ) = payable(user).call{value: balance}("");
+    //     // if (!success) revert WorkflowManager__TransferFailed();
+    //     // emit ActionCancelled(user, balance);
+    // }
+
+    function addPriceTriggerAction(bytes memory userWorkflow) internal {
+        Actions.PriceTrigger memory priceTrigger = abi.decode(userWorkflow, (Actions.PriceTrigger));
+        _validateAmountWithFee(priceTrigger.amount);
+        UserAction memory action = UserAction({
+            actionType: ActionType.PriceTrigger,
+            action: userWorkflow
+        });
+
+        uint256 nonce = userNonces[msg.sender];
+        userNonces[msg.sender]++;
+        userActions[msg.sender][nonce] = action;
+
+        emit PriceActionCreated(msg.sender, priceTrigger.token, priceTrigger.triggerPrice);
     }
 
-    function checkUpkeep(bytes calldata checkData) 
-        external 
-        view 
-        override 
-        returns (bool upkeepNeeded, bytes memory performData)
-    {
-        address user = abi.decode(checkData, (address));
-        Workflow storage w = workflows[user];
-        if (w.amount == 0 || userBalances[user] < w.amount) return (false, bytes(""));
-        upkeepNeeded = getPrice(w.priceFeed, w.triggerPrice, w.gt);
-        if (upkeepNeeded) {
-            performData = checkData;
-        } else {
-            performData = bytes("");
-        }
+    function addReceiveTriggerAction(bytes memory userWorkflow) internal {
+        Actions.ReceiveTrigger memory receiveTrigger = abi.decode(userWorkflow, (Actions.ReceiveTrigger));
+        _validateAmountWithFee(receiveTrigger.amount);
+        UserAction memory action = UserAction({
+            actionType: ActionType.ReceiveTrigger,
+            action: userWorkflow
+        });
+
+        uint256 nonce = userNonces[msg.sender];
+        userNonces[msg.sender]++;
+        userActions[msg.sender][nonce] = action;
+
+        emit ReceiveActionCreated(msg.sender, receiveTrigger.token, receiveTrigger.monitoredAddress);
     }
 
-    function performUpkeep(bytes calldata performData) external override onlyForwarder {
-        address user = abi.decode(performData, (address));
-        Workflow storage w = workflows[user];
-        uint256 amount = w.amount;
-        if (amount == 0 || userBalances[user] < amount) revert WorkflowManager__BalanceTooLow();
+    function addTimeTriggerAction(bytes memory userWorkflow) internal {
+        Actions.TimeTrigger memory timeTrigger = abi.decode(userWorkflow, (Actions.TimeTrigger));
+        _validateAmountWithFee(timeTrigger.amount);
+        UserAction memory action = UserAction({
+            actionType: ActionType.PriceTrigger,
+            action: userWorkflow
+        });
 
-        userBalances[user] -= amount;
-        delete workflows[user];
+        uint256 nonce = userNonces[msg.sender];
+        userNonces[msg.sender]++;
+        userActions[msg.sender][nonce] = action;
 
-        (bool success, ) = payable(w.target).call{value: amount}("");
-        if (!success) revert WorkflowManager__TransferFailed();
-        emit ActionExecuted(user, w.target, amount);
+        emit TimeActionCreated(msg.sender, timeTrigger.executeAfter);
     }
 
-
-    function getPrice(address priceFeed, uint256 triggerPrice, bool gt) internal view returns (bool) {
+    
+    function getPrice(address priceFeed, uint256 triggerPrice, bool isGreaterThan) internal view returns (bool) {
         AggregatorV3Interface aggregator = AggregatorV3Interface(
             priceFeed
         );
         (, int256 answer, , , ) = aggregator.latestRoundData();
-
-        if (gt) {
+        
+        if (isGreaterThan) {
             return uint256(answer * PRICE_SCALE) >= triggerPrice;
         } else {
             return uint256(answer * PRICE_SCALE) <= triggerPrice;
+        }
+    }
+
+    function _validateAmountWithFee(uint256 requiredAmount) internal view {
+        if (msg.value < requiredAmount + FEE) {
+            revert WorkflowManager__AmountIsTooLow();
         }
     }
 }
