@@ -7,9 +7,6 @@ import { IAutomationActions as Actions } from "./interfaces/IAutomationActions.s
 
 contract WorkflowManager is Ownable {
     error WorkflowManager__TransferFailed();
-    error WorkflowManager__NotAuthorized();
-    error WorkflowManager__InvalidParameter();
-    error WorkflowManager__BalanceTooLow();
     error WorkflowManager__AmountIsTooLow();
 
     event PriceActionCreated(address indexed user, address token, uint256 triggerPrice);
@@ -24,7 +21,8 @@ contract WorkflowManager is Ownable {
 
     struct UserAction {
         ActionType actionType;
-        bytes action;
+        bytes userWorkflow;
+        uint256 amount;
     }
 
     enum ActionType {
@@ -44,33 +42,44 @@ contract WorkflowManager is Ownable {
         } else if (ActionType.ReceiveTrigger == actionType) {
             addReceiveTriggerAction(userWorkflow);
         } else if (ActionType.TimeTrigger == actionType) {
-            addReceiveTriggerAction(userWorkflow);
+            addTimeTriggerAction(userWorkflow);
         }
     }
     
-    // function cancelAction() external {
-    //     // address user = msg.sender;
-    //     // uint256 balance = userBalances[user];
+    function cancelAction(uint256 _nonce) external {
+        address user = msg.sender;
+        UserAction storage action = userActions[user][_nonce];
+        uint256 amount = action.amount;
+        uint256 currentNonce = userNonces[user];
 
-    //     // userBalances[user] = 0;
-    //     // delete workflows[user];
+        userBalances[user] -= amount;
+        
+        delete userActions[user][_nonce];
 
-    //     // (bool success, ) = payable(user).call{value: balance}("");
-    //     // if (!success) revert WorkflowManager__TransferFailed();
-    //     // emit ActionCancelled(user, balance);
-    // }
+        if (currentNonce > _nonce) {
+            userNonces[user] = currentNonce + 1;
+        }
+
+        emit ActionCancelled(user, amount);
+        
+        (bool success, ) = payable(user).call{value: amount}("");
+        if (!success) revert WorkflowManager__TransferFailed();
+
+    }
 
     function addPriceTriggerAction(bytes memory userWorkflow) internal {
         Actions.PriceTrigger memory priceTrigger = abi.decode(userWorkflow, (Actions.PriceTrigger));
         _validateAmountWithFee(priceTrigger.amount);
         UserAction memory action = UserAction({
             actionType: ActionType.PriceTrigger,
-            action: userWorkflow
+            userWorkflow: userWorkflow,
+            amount: priceTrigger.amount
         });
 
         uint256 nonce = userNonces[msg.sender];
         userNonces[msg.sender]++;
         userActions[msg.sender][nonce] = action;
+       
 
         emit PriceActionCreated(msg.sender, priceTrigger.token, priceTrigger.triggerPrice);
     }
@@ -80,7 +89,8 @@ contract WorkflowManager is Ownable {
         _validateAmountWithFee(receiveTrigger.amount);
         UserAction memory action = UserAction({
             actionType: ActionType.ReceiveTrigger,
-            action: userWorkflow
+            userWorkflow: userWorkflow,
+            amount: receiveTrigger.amount
         });
 
         uint256 nonce = userNonces[msg.sender];
@@ -95,7 +105,8 @@ contract WorkflowManager is Ownable {
         _validateAmountWithFee(timeTrigger.amount);
         UserAction memory action = UserAction({
             actionType: ActionType.PriceTrigger,
-            action: userWorkflow
+            userWorkflow: userWorkflow,
+            amount: timeTrigger.amount
         });
 
         uint256 nonce = userNonces[msg.sender];
@@ -105,6 +116,12 @@ contract WorkflowManager is Ownable {
         emit TimeActionCreated(msg.sender, timeTrigger.executeAfter);
     }
 
+    function _validateAmountWithFee(uint256 requiredAmount) internal {
+        if (msg.value < requiredAmount + FEE) {
+            revert WorkflowManager__AmountIsTooLow();
+        }
+        userBalances[msg.sender] += msg.value;
+    }
     
     function getPrice(address priceFeed, uint256 triggerPrice, bool isGreaterThan) internal view returns (bool) {
         AggregatorV3Interface aggregator = AggregatorV3Interface(
@@ -116,12 +133,6 @@ contract WorkflowManager is Ownable {
             return uint256(answer * PRICE_SCALE) >= triggerPrice;
         } else {
             return uint256(answer * PRICE_SCALE) <= triggerPrice;
-        }
-    }
-
-    function _validateAmountWithFee(uint256 requiredAmount) internal view {
-        if (msg.value < requiredAmount + FEE) {
-            revert WorkflowManager__AmountIsTooLow();
         }
     }
 }
