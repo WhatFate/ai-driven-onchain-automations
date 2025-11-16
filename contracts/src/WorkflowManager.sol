@@ -5,7 +5,6 @@ import { Ownable } from "@openzeppelin-contracts/contracts/access/Ownable.sol";
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import { IAutomationActions as Actions } from "./interfaces/IAutomationActions.sol";
 import { IERC20 } from "@openzeppelin-contracts/contracts/interfaces/IERC20.sol";
-import {console} from "@forge-std/src/console.sol";
 
 /**
  * @title WorkflowManager
@@ -350,10 +349,6 @@ contract WorkflowManager is Ownable {
 
         uint256 current = uint256(answer);
         if (isGreaterThan) {
-            console.log(current);
-            // 3147802100
-            // 3200000000
-            console.log(triggerPrice * 1e6);
             return current >= triggerPrice * 1e6;
         } else {
             return current <= triggerPrice * 1e6;
