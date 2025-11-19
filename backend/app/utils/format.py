@@ -35,18 +35,14 @@ def parse_ai_response(response: str) -> dict:
 Trigger:
 - Type: {trigger.get('type')}
 - Asset: {trigger.get('asset')}
-- Operator: {trigger.get('operator')}
+- is Greater Than: {trigger.get('isGreaterThan')}
 - Value: {trigger.get('value')}
-- Interval: {trigger.get('interval') if trigger.get('type') == "time" else "N/A"}
-- Chain: {trigger.get('chain') or 'default'}
 
 Action:
 - Type: {action.get('type')}
-- From Token: {action.get('from_token')}
-- To Token: {action.get('to_token') or 'N/A'}
+- Token Address: {action.get('tokenAddress')}
 - Amount: {action.get('amount')}
-- Recipient Address: {action.get('to') or 'N/A'}
-- Protocol: {action.get('protocol') or 'N/A'}
+- Recipient Address: {action.get('recipient')}
 
 Verify before signing. Mistakes may cause irreversible loss.
 
@@ -60,18 +56,15 @@ If anything is wrong, cancel and update the automation before signing.
 def extract_workflow(data: dict) -> dict:
     trigger = data.get("data", data).get("trigger", {})
     action = data.get("data", data).get("action", {})
-
+    print(data)
     return {
         "trigger_type": trigger.get("type"),
         "trigger_asset": trigger.get("asset"),
-        "trigger_operator": trigger.get("operator"),
+        "trigger_is_greater_than": trigger.get("isGreaterThan"),
         "trigger_value": trigger.get("value"),
-        "trigger_interval": trigger.get("interval") if trigger.get("type") == "time" else None,
-        "trigger_chain": trigger.get("chain"),
+
         "action_type": action.get("type"),
-        "action_from_token": action.get("from_token"),
-        "action_to_token": action.get("to_token"),
+        "action_token_address": trigger.get("tokenAddress"),
         "action_amount": action.get("amount"),
-        "action_to": action.get("to"),
-        "action_protocol": action.get("protocol"),
+        "action_recipient": action.get("recipient"),
     }

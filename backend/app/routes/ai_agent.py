@@ -39,8 +39,6 @@ def get_asi1_response(query: str) -> str:
     ]
 }
 
-
-
     try:
         response = requests.post("https://api.asi1.ai/v1/chat/completions", json=data, headers=headers)
         if response.status_code == 200:
