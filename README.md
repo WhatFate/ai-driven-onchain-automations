@@ -6,13 +6,16 @@ Think of it as **“Zapier for DeFi”** — an AI copilot that turns your comma
 
 ## Overview
 
-With Kairos, you can automate onchain actions like transfers, swaps, or staking conditions — all through simple text.
+With Kairos, you can automate onchain actions like transfers based on price conditions — all through simple text.
+
+Currently, the Sepolia deployment supports only PriceTrigger actions with ETH, DAI, LINK, and USDC.
 
 ### Example Commands
 
-> “If ETH price reaches $2500 — send 0.1 ETH to this address.”  
-> “Every Monday, transfer 5 USDC to my subscription contract.”  
-> “When my balance falls below 0.5 ETH, top it up with 0.1 from Polygon.”
+> “If ETH price reaches $2500 — send 0.1 ETH to this address.”
+> “If DAI price drops below $0.99 — send 50 DAI to 0xAbC123...”
+
+> **Note:** ReceiveTrigger and TimeTrigger are planned but not yet implemented.
 
 The AI agent parses these intents and generates executable workflows stored on-chain.
 
@@ -27,51 +30,53 @@ The AI agent parses these intents and generates executable workflows stored on-c
   "trigger": {
     "type": "price",
     "asset": "ETH",
-    "operator": ">=",
+    "tokenAddress": "0x0000000000000000000000000000000000000000",
+    "isGreaterThan": true,
     "value": 2500
   },
   "action": {
-    "token": "ETH",
+    "type": "transfer",
+    "tokenAddress": "0x0000000000000000000000000000000000000000",
     "amount": 0.1,
-    "to": "0xAbC123..."
+    "recipient": "0xAbC123..."
   }
 }
 ```
 
-This JSON is sent to the backend through a secure REST API or webhook.
+This JSON is sent to the frontend for submission to the smart contract.
 
-### 2. **Backend / AI Executor**
+### 2. **Backend / AI Middleware**
 
-* Stores user workflows and links them to wallet addresses.
-* Generates the corresponding smart contract calls.
-* Handles signature requests and trigger validation.
+* Receives user messages from the frontend.
+* Sends the user input to the AI agent.
+* Receives the structured JSON response from the AI agent.
+* Formats the JSON and returns it to the frontend.
 
 ### 3. **Smart Contract Layer (Solidity)**
 
-* Keeps workflow definitions (condition → action).
-* Executes actions deterministically when triggers fire.
-* Enforces limits: amount caps, frequency, expiration time.
+* Stores workflow definitions on-chain (condition → action).
+* Executes PriceTrigger actions deterministically when conditions fire.
+* **Any user** can call `executeAction()` on behalf of another user; execution succeeds **only if conditions are met**.
+* Execution fees are paid to the caller of `executeAction()`.
+* Tracks user deposits per token.
+
+**Current limitations:**
+* ReceiveTrigger and TimeTrigger are placeholders (logic not yet implemented).
+* Only ETH, DAI, LINK, USDC supported.
 
 ### 4. **Off-chain Agent / Oracle**
 
-* Monitors onchain/offchain data (e.g., prices via Chainlink).
+* Monitors onchain/offchain data via Chainlink price feeds.
 * Calls `execute()` when conditions are met.
 * Ensures reliable automation without constant onchain polling.
-
-### 5. **User Notifications**
-
-* When an automation runs, the AI notifies the user:
-
-  > “Condition met — sent 0.1 ETH to 0xAbC123…”
 
 ## Tech Stack
 
 | Component          | Technology                         |
 | ------------------ | ---------------------------------- |
-| AI Parsing Layer   | OpenAI / Llama / Custom LLM        |
+| AI Parsing Layer   | asi1 agent                         |
 | Smart Contracts    | Solidity (EVM-compatible networks) |
-| Off-chain Agent    | Node.js / Python                   |
-| Price Data         | Chainlink / Band Protocol          |
+| Price Data         | Chainlink                          |
 | Frontend           | Next.js + wagmi + RainbowKit       |
 | Wallet Integration | MetaMask / WalletConnect           |
 
@@ -85,9 +90,10 @@ This JSON is sent to the backend through a secure REST API or webhook.
 
 ## Potential Extensions
 
-* **Automation Marketplace** for reusable “if-this-then-that” workflows.
-* **DAO governance** for managing shared automations.
-* **AI-based portfolio balancing** and real-time strategy execution.
+* **ReceiveTrigger & TimeTrigger** implementation.
+* **Automation Marketplace** for reusable workflows.
+* **DAO governance** for shared automation control.
+* **AI-based portfolio balancing** and real-time strategies.
 
 ## Example Workflow (MVP Phase)
 
@@ -96,28 +102,36 @@ This JSON is sent to the backend through a secure REST API or webhook.
 
 **Flow:**
 
-1. AI parses command and stores workflow.
-2. Off-chain agent watches ETH/USD price via Chainlink.
-3. When triggered, backend executes smart contract call.
-4. User gets notification:
-    “0.1 ETH successfully transferred.”
+1. User submits command via frontend.
+2. Backend sends the message to the AI agent.
+3. AI agent parses it and returns structured JSON.
+4. Backend formats and returns JSON to frontend.
+5. Frontend allows user to submit the transaction to the smart contract.
+6. Off-chain agent monitors conditions and executes `executeAction()` when triggered.
 
+Contract Address: `0x6D2E351Ea84BF281237f1b512b0F5ddFA131acc2` (Sepolia)
 
 ## Architecture Diagram
 
-```
+```pgsql
 +---------------------+
 |         User        |
 +----------+----------+
            |
            v
 +----------+----------+
-|   AI Parser (LLM)   |
+|   Frontend (Next.js)|
 +----------+----------+
            |
            v
 +----------+----------+
-|   Backend Executor  |
+| Backend Middleware  |
+|  (Node.js / Python) |
++----------+----------+
+           |
+           v
++----------+----------+
+|      AI Agent       |
 +----------+----------+
            |
            v
