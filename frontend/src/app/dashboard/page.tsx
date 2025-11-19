@@ -42,10 +42,13 @@ export default function Dashboard() {
           ...prev,
           { role: "assistant", content: response.prompt },
         ]);
+
         await createAutomation(
+          response.workflow.action_token_address,
+          response.workflow.action_recipient,
+          response.workflow.trigger_value,
           response.workflow.action_amount,
-          response.workflow.action_to,
-          response.workflow.trigger_value
+          response.workflow.trigger_is_greater_than
         );
       }
     } catch (error) {
